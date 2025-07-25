@@ -1,108 +1,103 @@
 import streamlit as st
-from collections import OrderedDict
+import heapq
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 
-# LRU Cache class definition
-class LRUCache:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.cache = OrderedDict()
+# Initialize session state for heaps and number list
+if 'min_heap' not in st.session_state:
+    st.session_state.min_heap = []  # Min-heap for the larger half
+if 'max_heap' not in st.session_state:
+    st.session_state.max_heap = []  # Max-heap (inverted min-heap) for the smaller half
+if 'numbers' not in st.session_state:
+    st.session_state.numbers = []
 
-    def get(self, key):
-        if key not in self.cache:
-            return -1
-        self.cache.move_to_end(key)
-        return self.cache[key]
+st.set_page_config(page_title="Running Median with Heaps", layout="centered")
+st.title("📊 Running Median Finder Using Heaps")
+st.markdown("""
+This app demonstrates how to maintain a *running median* using two heaps:
+- A *max heap* for the smaller half of the data
+- A *min heap* for the larger half of the data
+""")
 
-    def put(self, key, value):
-        if key in self.cache:
-            self.cache.move_to_end(key)
-        self.cache[key] = value
-        if len(self.cache) > self.capacity:
-            self.cache.popitem(last=False)
+number = st.number_input("Enter a number to insert:", step=1, format="%d")
+if st.button("Insert Number"):
+    st.session_state.numbers.append(number)
 
-    def display(self):
-        return list(self.cache.items())[::-1]  # MRU to LRU
-
-# Page settings
-st.set_page_config(page_title="LRU Cache App", layout="centered")
-st.title("📦 LRU Cache Visual Simulator")
-
-# Informational Section
-with st.expander("ℹ️ What is LRU Cache?"):
-    st.markdown("""
-    LRU (**Least Recently Used**) Cache stores a **fixed number** of items. When full, it removes the **least recently used** item to make space for new data.  
-    This ensures **efficient memory usage and faster access**.
-    """)
-
-with st.expander("⚙️ How It Works"):
-    st.markdown("""
-    - 🔹 **Set the cache size** before using it.  
-    - 🔹 Use **Put** to store key-value pairs.  
-    - 🔹 Use **Get** to retrieve values (moves item to front).  
-    - 🔹 If full, the **Least Recently Used** item is **removed**.
-    """)
-
-with st.expander("🌐 Where is LRU Cache Used?"):
-    st.markdown("""
-    ✅ **Operating Systems** – Manages memory pages.  
-    ✅ **Web Browsers** – Stores frequently visited sites.  
-    ✅ **Databases** – Optimizes query caching.  
-    ✅ **Networking** – Used in Content Delivery Networks (CDNs).
-    """)
-
-# Cache Initialization
-if "cache_initialized" not in st.session_state:
-    st.session_state.cache_initialized = False
-
-if not st.session_state.cache_initialized:
-    with st.form("init_cache"):
-        capacity = st.number_input("🔧 Enter Cache Capacity", min_value=1, step=1, format="%d")
-        if st.form_submit_button("Initialize"):
-            st.session_state.cache = LRUCache(capacity)
-            st.session_state.capacity = capacity
-            st.session_state.cache_initialized = True
-
-# Main UI
-if st.session_state.cache_initialized:
-    st.success(f"✅ Cache Initialized with capacity = {st.session_state.capacity}")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("➕ Insert / Update")
-        with st.form("put_form"):
-            put_key = st.number_input("Key", step=1, format="%d")
-            put_value = st.number_input("Value", step=1, format="%d")
-            if st.form_submit_button("Put"):
-                st.session_state.cache.put(put_key, put_value)
-                st.success(f"Put ({put_key}, {put_value})")
-
-    with col2:
-        st.subheader("🔍 Retrieve")
-        with st.form("get_form"):
-            get_key = st.number_input("Get Key", step=1, format="%d", key="get_key")
-            if st.form_submit_button("Get"):
-                value = st.session_state.cache.get(get_key)
-                if value == -1:
-                    st.warning("❌ Key not found.")
-                else:
-                    st.success(f"Value = {value}")
-
-    st.divider()
-    st.subheader("📊 Cache State (MRU → LRU)")
-    items = st.session_state.cache.display()
-    if items:
-        cols = st.columns(len(items))
-        for idx, (k, v) in enumerate(items):
-            with cols[idx]:
-                st.markdown(
-                    f"<div style='padding:15px;background:#4CAF50;color:white;border-radius:10px;text-align:center;'>"
-                    f"<b>{k}</b><br/>{v}</div>", unsafe_allow_html=True
-                )
-        st.markdown("<center>⬅️ MRU | LRU ➡️</center>", unsafe_allow_html=True)
+    # Insert into the appropriate heap
+    if not st.session_state.max_heap or number <= -st.session_state.max_heap[0]:
+        heapq.heappush(st.session_state.max_heap, -number)
     else:
-        st.info("Cache is empty.")
+        heapq.heappush(st.session_state.min_heap, number)
 
-    if st.button("🔁 Reset"):
-        for k in ["cache_initialized", "cache", "capacity"]:
-            if k in st.session_state:
-                del st.session_state[k]
+    # Balance the heaps
+    if len(st.session_state.max_heap) > len(st.session_state.min_heap) + 1:
+        moved = -heapq.heappop(st.session_state.max_heap)
+        heapq.heappush(st.session_state.min_heap, moved)
+    elif len(st.session_state.min_heap) > len(st.session_state.max_heap):
+        moved = heapq.heappop(st.session_state.min_heap)
+        heapq.heappush(st.session_state.max_heap, -moved)
+
+    st.success(f"Inserted {number}!")
+
+# Display entered numbers
+st.subheader("🔢 Numbers Entered")
+st.write(", ".join(map(str, st.session_state.numbers)) if st.session_state.numbers else "None")
+
+# Calculate and show median
+if st.session_state.numbers:
+    if len(st.session_state.max_heap) == len(st.session_state.min_heap):
+        median = (-st.session_state.max_heap[0] + st.session_state.min_heap[0]) / 2
+    else:
+        median = -st.session_state.max_heap[0]
+
+    st.markdown("""
+    <div style='background-color:#ffd700; padding:20px; border-radius:10px; text-align:center;'>
+        <h2 style='color:#000;'>📍 <u>Current Median</u></h2>
+        <h1 style='color:#d63384;'>💡 {:.2f}</h1>
+    </div>
+    """.format(median), unsafe_allow_html=True)
+
+    # Visualization of heaps as circles
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.set_xlim(0, 12)
+    ax.set_ylim(0, 2)
+    ax.axis('off')
+
+    # Draw Max Heap (left side)
+    ax.text(1, 1.5, 'Max Heap', fontsize=12, weight='bold')
+    max_vals = sorted([-x for x in st.session_state.max_heap], reverse=True)
+    if len(max_vals) > 2:
+        circle = Circle((2.5, 1), 1.0, color='#1f77b4', alpha=0.8)
+        ax.add_patch(circle)
+        text = ", ".join(map(str, max_vals))
+        ax.text(2.5, 1, text, color='white', ha='center', va='center', fontsize=9, wrap=True)
+    else:
+        for i, val in enumerate(max_vals):
+            x = 1 + i * 1.2
+            circle = Circle((x, 1), 0.5, color='#1f77b4', alpha=0.8)
+            ax.add_patch(circle)
+            ax.text(x, 1, str(val), color='white', ha='center', va='center', fontsize=10)
+
+    # Draw Min Heap (right side)
+    ax.text(7, 1.5, 'Min Heap', fontsize=12, weight='bold')
+    min_vals = sorted(st.session_state.min_heap)
+    if len(min_vals) > 2:
+        circle = Circle((8.5, 1), 1.0, color='#ff7f0e', alpha=0.8)
+        ax.add_patch(circle)
+        text = ", ".join(map(str, min_vals))
+        ax.text(8.5, 1, text, color='white', ha='center', va='center', fontsize=9, wrap=True)
+    else:
+        for i, val in enumerate(min_vals):
+            x = 7 + i * 1.2
+            circle = Circle((x, 1), 0.5, color='#ff7f0e', alpha=0.8)
+            ax.add_patch(circle)
+            ax.text(x, 1, str(val), color='white', ha='center', va='center', fontsize=10)
+
+    st.pyplot(fig)
+
+# Reset button
+if st.button("Reset"):
+    st.session_state.numbers.clear()
+    st.session_state.max_heap.clear()
+    st.session_state.min_heap.clear()
+    st.info("State has been reset.")
